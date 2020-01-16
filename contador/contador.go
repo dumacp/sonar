@@ -114,7 +114,7 @@ func (dev *Device) ListenChannel() <-chan []int {
 	go func() {
 		first := true
 		for v := range ch {
-			// log.Printf("trama: %s\n", v)
+			// fmt.Printf("trama: %s\n", v)
 			if strings.Contains(v, "RPT") {
 				split := strings.Split(v, ";")
 				data := make([]int, 8)
@@ -151,7 +151,8 @@ func (dev *Device) ListenChannel() <-chan []int {
 			}
 			select {
 			case registers <- acc:
-			case <-time.After(1 * time.Second):
+				acc = []int{0, 0, 0, 0}
+			default:
 			}
 
 		}
@@ -165,6 +166,14 @@ func (dev *Device) Contadores() ([]int, error) {
 	temp := dev.acc
 	dev.acc = make([]int, 4)
 	return temp, nil
+}
+
+func (dev *Device) Registros() ([]int, error) {
+	if !dev.ok {
+		return nil, fmt.Errorf("device Error")
+	}
+
+	return dev.reg, nil
 }
 
 func (dev *Device) ContadorUP_puerta1() (int, error) {
