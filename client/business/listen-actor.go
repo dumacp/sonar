@@ -111,53 +111,6 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 		data = append(data, []byte("\r\n")...)
 		logs.LogBuild.Printf("send to console ->, %s", data)
 		contador.SendData(act.dev, data)
-	case *contador.Input:
-		logs.LogBuild.Printf("contador -> %#v", msg)
-		id := msg.Id
-		if id == 0 {
-			enters := msg.Value
-			if diff := enters - act.enters0Before; diff > 0 {
-				act.context.Send(act.context.Parent(), &messages.Event{Id: 0, Type: messages.INPUT, Value: enters})
-			}
-			act.enters0Before = enters
-		} else {
-			enters := msg.Value
-			if diff := enters - act.enters1Before; diff > 0 {
-				act.context.Send(act.context.Parent(), &messages.Event{Id: 1, Type: messages.INPUT, Value: enters})
-			}
-			act.enters1Before = enters
-		}
-	case *contador.Output:
-		logs.LogBuild.Printf("contador -> %#v", msg)
-		id := msg.Id
-		if id == 0 {
-			enters := msg.Value
-			if diff := enters - act.exits0Before; diff > 0 {
-				act.context.Send(act.context.Parent(), &messages.Event{Id: 0, Type: messages.OUTPUT, Value: enters})
-			}
-			act.exits0Before = enters
-		} else {
-			enters := msg.Value
-			if diff := enters - act.exits1Before; diff > 0 {
-				act.context.Send(act.context.Parent(), &messages.Event{Id: 1, Type: messages.OUTPUT, Value: enters})
-			}
-			act.exits1Before = enters
-		}
-	case *contador.Lock:
-		id := msg.Id
-		if id == 0 {
-			enters := msg.Value
-			if diff := enters - act.locks0Before; diff > 0 {
-				act.context.Send(act.context.Parent(), &messages.Event{Id: 0, Type: messages.TAMPERING, Value: enters})
-			}
-			act.locks0Before = enters
-		} else {
-			enters := msg.Value
-			if diff := enters - act.locks1Before; diff > 0 {
-				act.context.Send(act.context.Parent(), &messages.Event{Id: 1, Type: messages.TAMPERING, Value: enters})
-			}
-			act.locks1Before = enters
-		}
 	}
 }
 

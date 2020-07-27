@@ -2,7 +2,6 @@ package business
 
 import (
 	"bytes"
-	"log"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/AsynkronIT/protoactor-go/persistence"
@@ -192,8 +191,6 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 
 	case *MsgSendRegisters:
 
-		log.Println("registers")
-
 		if verifySum(a.outputs) <= 0 && verifySum(a.inputs) <= 0 {
 			break
 		}
@@ -205,7 +202,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		// }
 		// ctx.Send(a.pubsub, snap)
 		if reg := registers(a.inputs, a.outputs, a.counterType); reg != nil {
-			log.Printf("registers: %v", reg)
+			// log.Printf("registers: %v", reg)
 			ctx.Send(a.pubsub, reg)
 		}
 
@@ -382,11 +379,11 @@ func sendEvent(ctx actor.Context, dts *actor.PID, tp int, id int32, value int64,
 }
 
 func registers(inputs, outputs map[int32]int64, tp int) *register {
-	log.Printf("counter type = %d", tp)
+	// log.Printf("counter type = %d", tp)
 	reg := &register{}
 	regv := make([]int64, 0)
 	if tp == 2 {
-		log.Println("counter type 2")
+		// log.Println("counter type 2")
 		if _, ok := inputs[0]; !ok {
 			return nil
 		}
