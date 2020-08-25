@@ -7,6 +7,7 @@ package contador
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -159,6 +160,74 @@ func (dev *Device) ListenChannel() <-chan []int {
 	}()
 	return registers
 }
+
+func (dev *Device) ListenChannelv2(quit chan int) <-chan []int {
+
+	registers := make(chan []int, 0)
+	acc := make([]int, 5)
+	ch := dev.read()
+	go func() {
+		defer close(registers)
+		first := true
+		for v := range ch {
+			fmt.Printf("trama: %s\n", v)
+			if strings.Contains(v, "RPT") {
+				split := strings.Split(v, ";")
+				if len(split) < 17 {
+					break
+				}
+				data := make([]int, 15)
+				ok := true
+				for i, _ := range data {
+					xint, err := strconv.Atoi(split[i+2])
+					if err != nil {
+						ok = false
+						break
+					}
+					data[i] = xint
+				}
+				if !ok {
+					continue
+				}
+				if first {
+					dev.reg = data
+					first = false
+					// continue
+				}
+
+				for i := 0; i < 4; i++ {
+					if data[i] >= dev.reg[i] {
+						acc[i] += data[i] - dev.reg[i]
+					} else {
+						if data[i+4] >= dev.reg[i+4] {
+							acc[i] += data[i+4] - dev.reg[i+4]
+						} else {
+							acc[i] = 0
+						}
+					}
+				}
+				if data[10] >= dev.reg[10] {
+					acc[4] = data[11] - dev.reg[11]
+				} else if data[13] >= dev.reg[14] {
+					acc[4] = data[13] - dev.reg[14]
+				} else {
+					acc[4] = 0
+				}
+				dev.reg = data
+				select {
+				case <-quit:
+					dev.Close()
+					return
+				case registers <- dev.reg:
+					acc = []int{0, 0, 0, 0, 0}
+				case <-time.After(time.Second * 1):
+				}
+			}
+		}
+	}()
+	return registers
+}
+
 func (dev *Device) Contadores() ([]int, error) {
 	if !dev.ok {
 		return nil, fmt.Errorf("device Error")
@@ -218,6 +287,7 @@ func (dev *Device) read() chan string {
 		// log.Println("Device is closed")
 		return nil
 	}
+	// fmt.Println("reading port")
 	ch := make(chan string)
 
 	//buf := make([]byte, 128)
@@ -229,7 +299,7 @@ func (dev *Device) read() chan string {
 		for {
 			b, err := bf.ReadBytes('<')
 			if err != nil {
-				// log.Println(err)
+				log.Println(err)
 				if countError > 3 {
 					dev.Close()
 					return
@@ -239,7 +309,7 @@ func (dev *Device) read() chan string {
 				continue
 			}
 			data := string(b[:])
-			// log.Printf("serial input: %q\n", data)
+			// fmt.Printf("serial input: %q\n", data)
 			ch <- data
 		}
 	}()
