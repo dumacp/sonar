@@ -46,8 +46,6 @@ func main() {
 	}
 	initLogs(debug, logStd)
 
-	// peoplecounting.Listen(socket, errlog)
-
 	provider, err := newProvider(pathdb, 10)
 	if err != nil {
 		log.Fatalln(err)
@@ -73,22 +71,23 @@ func main() {
 		listenner.WithDebug()
 	}
 
-	// propsListen := actor.PropsFromFunc(listenner.Receive)
-	// pidListen, err := rootContext.SpawnNamed(propsListen, "listenner")
-	// if err != nil {
-	// 	errlog.Println(err)
-	// // }
+	propsListen := actor.PropsFromFunc(listenner.Receive)
+	pidListen, err := rootContext.SpawnNamed(propsListen, "listenner")
+	if err != nil {
+		errlog.Println(err)
+	}
 
-	// time.Sleep(1 * time.Second)
+	time.Sleep(1 * time.Second)
 
-	// rootContext.Send(pidListen, &messages.CountingActor{
-	// 	Address: pidCounting.Address,
-	// 	ID:      pidCounting.Id})
+	rootContext.Send(pidListen, &messages.CountingActor{
+		Address: pidCounting.Address,
+		ID:      pidCounting.Id})
 
 	time.Sleep(3 * time.Second)
 
 	rootContext.Send(pidCounting, &client.MsgSendRegisters{})
 
+	//TEST
 	// rootContext.PoisonFuture(pidListen).Wait()
 	// pidListen, err = rootContext.SpawnNamed(propsListen, "listenner")
 	// if err != nil {
@@ -105,19 +104,19 @@ func main() {
 		}
 	}()
 
-	//TEST
-	{
-		msg1 := messages.Event{Id: 0, Value: 10, Type: messages.INPUT}
-		msg2 := messages.Event{Id: 0, Value: 1, Type: messages.OUTPUT}
-		msg3 := messages.Event{Id: 0, Value: 12, Type: messages.INPUT}
-		msg4 := messages.Event{Id: 0, Value: 5, Type: messages.OUTPUT}
+	// //TEST
+	// {
+	// 	msg1 := messages.Event{Id: 0, Value: 10, Type: messages.INPUT}
+	// 	msg2 := messages.Event{Id: 0, Value: 1, Type: messages.OUTPUT}
+	// 	msg3 := messages.Event{Id: 0, Value: 12, Type: messages.INPUT}
+	// 	msg4 := messages.Event{Id: 0, Value: 5, Type: messages.OUTPUT}
 
-		rootContext.Send(pidCounting, &msg1)
-		rootContext.Send(pidCounting, &msg2)
-		rootContext.Send(pidCounting, &msg3)
-		rootContext.Send(pidCounting, &msg4)
+	// 	rootContext.Send(pidCounting, &msg1)
+	// 	rootContext.Send(pidCounting, &msg2)
+	// 	rootContext.Send(pidCounting, &msg3)
+	// 	rootContext.Send(pidCounting, &msg4)
 
-	}
+	// }
 
 	finish := make(chan os.Signal, 1)
 	signal.Notify(finish, syscall.SIGINT)
