@@ -58,9 +58,10 @@ func (act *EventActor) Receive(ctx actor.Context) {
 		ctx.Send(ctx.Parent(), &msgEvent{data: event})
 	case *msgGPS:
 		mem := captureGPS(msg.data)
-		if mem.typeM == gngnsType {
+		switch mem.typeM {
+		case gprmctype:
 			act.mem1 = &mem
-		} else if mem.typeM == gngnsType {
+		case gngnsType:
 			act.mem2 = &mem
 		}
 	case *msgDoor:
@@ -165,14 +166,13 @@ func buildEventTampering(ctx actor.Context, v *messages.Event, mem1, mem2 *memor
 	}
 	frame := ""
 
-	if mem1.timestamp > mem2.timestamp {
-		if mem1.timestamp+30 > tn.Unix() {
-			frame = mem1.frame
-		}
-	} else {
-		if mem2.timestamp+30 > tn.Unix() {
-			frame = mem2.frame
-		}
+	// if mem1.timestamp > mem2.timestamp {
+	if mem1.timestamp+30 > tn.Unix() {
+		frame = mem1.frame
+		// }
+	} else if mem2.timestamp+30 > tn.Unix() {
+		frame = mem2.frame
+		// }
 	}
 
 	doorState := uint(0)

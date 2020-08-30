@@ -173,7 +173,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 			}
 
 			diff := msg.GetValue() - a.rawInputs[id]
-			if diff > 0 && a.inputs[id] <= 0 && a.rawInputs[id] <= 0 {
+			if diff > 0 && a.rawInputs[id] <= 0 {
 				a.inputs[id] = 1
 				if !a.Recovering() {
 					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: 1})
@@ -184,7 +184,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: diff})
 				}
 			} else if diff < 0 {
-				a.inputs[id] += msg.GetValue()
+				// a.inputs[id] += msg.GetValue()
 				if !a.Recovering() {
 					ctx.Send(a.events, msg)
 				}
@@ -199,7 +199,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 				a.outputs[id] = 0
 			}
 			diff := msg.GetValue() - a.rawOutputs[id]
-			if diff > 0 && a.outputs[id] <= 0 && a.rawOutputs[id] <= 0 {
+			if diff > 0 && a.rawOutputs[id] <= 0 {
 				a.outputs[id] = 1
 				if !a.Recovering() {
 					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: 1})
@@ -210,7 +210,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: diff})
 				}
 			} else if diff < 0 {
-				a.outputs[id] += msg.GetValue()
+				// a.outputs[id] += msg.GetValue()
 				if !a.Recovering() {
 					ctx.Send(a.events, msg)
 				}
