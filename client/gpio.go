@@ -24,7 +24,7 @@ func gpioNewWatcher(quit chan int, pins ...uint) (ch chan [2]uint, err error) {
 	ch = make(chan [2]uint, 0)
 	go func() {
 		defer close(ch)
-		t1 := time.NewTicker(3 * time.Second)
+		t1 := time.NewTicker(1 * time.Second)
 		defer t1.Stop()
 		for {
 			select {

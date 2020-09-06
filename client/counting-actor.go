@@ -16,6 +16,9 @@ type CountingActor struct {
 	rawInputs      map[int32]int64
 	rawOutputs     map[int32]int64
 
+	puertas   map[uint]uint
+	openState map[int32]uint
+
 	pubsub *actor.PID
 	doors  *actor.PID
 	events *actor.PID
@@ -26,7 +29,27 @@ type CountingActor struct {
 func NewCountingActor() *CountingActor {
 	count := &CountingActor{}
 	count.Logger = &Logger{}
+	count.puertas = make(map[uint]uint)
+	count.openState = make(map[int32]uint)
 	return count
+}
+
+//SetZeroOpenStateDoor0 set the open state in gpio door
+func (a *CountingActor) SetZeroOpenStateDoor0(state bool) {
+	if state {
+		a.openState[0] = 0
+	} else {
+		a.openState[0] = 1
+	}
+}
+
+//SetZeroOpenStateDoor1 set the open state in gpio door
+func (a *CountingActor) SetZeroOpenStateDoor1(state bool) {
+	if state {
+		a.openState[1] = 0
+	} else {
+		a.openState[1] = 1
+	}
 }
 
 // type Snapshot struct {
@@ -143,8 +166,10 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		a.infoLog.Printf("replay completed, internal state changed to:\n\tinputs -> '%v', outputs -> '%v'\n",
 			a.inputs, a.outputs)
 		snap := &messages.Snapshot{
-			Inputs:  a.inputs,
-			Outputs: a.outputs,
+			Inputs:     a.inputs,
+			Outputs:    a.outputs,
+			RawInputs:  a.rawInputs,
+			RawOutputs: a.rawOutputs,
 		}
 		// a.PersistSnapshot(snap)
 		ctx.Send(a.pubsub, snap)
@@ -179,9 +204,11 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: 1})
 				}
 			} else if diff > 0 {
-				a.inputs[id] += diff
-				if !a.Recovering() {
-					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: diff})
+				if v, ok := a.puertas[uint(id)]; !ok || v == a.openState[id] {
+					a.inputs[id] += diff
+					if !a.Recovering() {
+						ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: diff})
+					}
 				}
 			} else if diff < 0 {
 				// a.inputs[id] += msg.GetValue()
@@ -205,9 +232,11 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: 1})
 				}
 			} else if diff > 0 {
-				a.outputs[id] += diff
-				if !a.Recovering() {
-					ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: diff})
+				if v, ok := a.puertas[uint(id)]; !ok || v == a.openState[id] {
+					a.outputs[id] += diff
+					if !a.Recovering() {
+						ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: diff})
+					}
 				}
 			} else if diff < 0 {
 				// a.outputs[id] += msg.GetValue()
@@ -236,6 +265,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		a.warnLog.Printf("counter keep alive error")
 		ctx.Send(a.pubsub, msg)
 	case *msgDoor:
+		a.puertas[msg.id] = msg.value
 		ctx.Send(a.events, msg)
 	case *msgGPS:
 		ctx.Send(a.events, msg)

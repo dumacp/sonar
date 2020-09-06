@@ -61,10 +61,12 @@ func (act *ActorPubsub) Receive(ctx actor.Context) {
 	case *messages.Snapshot:
 		reg := &register{}
 		regv := make([]int64, 0)
-		for _, v := range msg.RawInputs {
+		sortInputs := SortMap(msg.Inputs)
+		for _, v := range sortInputs {
 			regv = append(regv, v)
 		}
-		for _, v := range msg.RawOutputs {
+		sortOutputs := SortMap(msg.Outputs)
+		for _, v := range sortOutputs {
 			regv = append(regv, v)
 		}
 		reg.Registers = regv

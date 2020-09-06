@@ -22,9 +22,10 @@ type ListenActor struct {
 
 	quit chan int
 
-	socket   string
-	baudRate int
-	dev      *contador.Device
+	socket      string
+	baudRate    int
+	dev         *contador.Device
+	timeFailure int
 }
 
 //NewListen create listen actor
@@ -35,6 +36,7 @@ func NewListen(socket string, baudRate int, countingActor *actor.PID) *ListenAct
 	act.baudRate = baudRate
 	act.Logger = &Logger{}
 	act.quit = make(chan int, 0)
+	act.timeFailure = 3
 	return act
 }
 
@@ -62,6 +64,9 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 	case *messages.CountingActor:
 		act.countingActor = actor.NewPID(msg.Address, msg.ID)
 	case *msgListenError:
+		ctx.Send(act.countingActor, &msgPingError{})
+		time.Sleep(time.Duration(act.timeFailure) * time.Second)
+		act.timeFailure = 2 * act.timeFailure
 		act.errLog.Panicln("listen error")
 	}
 }

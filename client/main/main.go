@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	showVersion = "1.0.3"
+	showVersion = "1.0.5"
 )
 
 var debug bool
@@ -26,6 +26,9 @@ var pathdb string
 var port string
 var baudRate int
 var version bool
+var loglevel int
+var isZeroOpenStateDoor0 bool
+var isZeroOpenStateDoor1 bool
 
 func init() {
 	flag.BoolVar(&debug, "debug", false, "debug enable")
@@ -33,7 +36,10 @@ func init() {
 	flag.StringVar(&pathdb, "pathdb", "/SD/boltdbs/countingdb", "socket to listen events")
 	flag.StringVar(&socket, "port", "/dev/ttyS2", "serial port")
 	flag.IntVar(&baudRate, "baud", 19200, "baudrate")
+	flag.IntVar(&loglevel, "loglevel", 0, "level log")
 	flag.BoolVar(&version, "version", false, "show version")
+	flag.BoolVar(&isZeroOpenStateDoor0, "zeroOpenStateDoor0", false, "Is Zero the open state in front door?")
+	flag.BoolVar(&isZeroOpenStateDoor0, "zeroOpenStateDoor1", false, "Is Zero the open state in back door?")
 }
 
 func main() {
@@ -54,6 +60,8 @@ func main() {
 	rootContext := actor.EmptyRootContext
 
 	counting := client.NewCountingActor()
+	counting.SetZeroOpenStateDoor0(isZeroOpenStateDoor0)
+	counting.SetZeroOpenStateDoor1(isZeroOpenStateDoor1)
 	counting.SetLogError(errlog).SetLogWarn(warnlog).SetLogInfo(infolog).SetLogBuild(buildlog)
 	if debug {
 		counting.WithDebug()
