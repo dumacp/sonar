@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dumacp/sonar/client/logs"
 	"github.com/tarm/serial"
 )
 
@@ -40,7 +41,7 @@ func NewDevice(portName string, baudRate int) (*Device, error) {
 		conf: config,
 		ok:   false,
 		acc:  make([]int, 4),
-		reg:  make([]int, 8),
+		reg:  make([]int, 16),
 	}
 	return dev, nil
 }
@@ -52,6 +53,21 @@ func (dev *Device) Connect() error {
 	}
 	dev.port = s
 	dev.ok = true
+	return nil
+}
+
+func (dev *Device) Send(data []byte) error {
+	n, err := dev.port.Write(data)
+	if err != nil {
+		return err
+	}
+	dev.port.Flush()
+	if err != nil {
+		return err
+	}
+	if len(data) > 0 && n <= 0 {
+		return fmt.Errorf("write serial error, n = %d, data = [%X]", n, data)
+	}
 	return nil
 }
 
@@ -68,7 +84,8 @@ func (dev *Device) ListenRegisters() {
 
 	ch := dev.read()
 	first := true
-	for v := range ch {
+	for vv := range ch {
+		v := string(vv)
 		// log.Printf("trama: %s\n", v)
 		if strings.Contains(v, "RPT") {
 			split := strings.Split(v, ";")
@@ -114,7 +131,8 @@ func (dev *Device) ListenChannel() <-chan []int {
 	ch := dev.read()
 	go func() {
 		first := true
-		for v := range ch {
+		for vv := range ch {
+			v := string(vv)
 			// fmt.Printf("trama: %s\n", v)
 			if strings.Contains(v, "RPT") {
 				split := strings.Split(v, ";")
@@ -161,6 +179,27 @@ func (dev *Device) ListenChannel() <-chan []int {
 	return registers
 }
 
+//ListenRawChannel listen raw data
+func (dev *Device) ListenRawChannel(quit chan int) chan []byte {
+	ch := make(chan []byte, 0)
+	go func() {
+		chread := dev.read()
+		defer dev.Close()
+		defer close(ch)
+		for v := range chread {
+			select {
+			case ch <- v:
+			case <-time.After(200 * time.Millisecond):
+			case <-quit:
+				return
+			}
+		}
+	}()
+
+	return ch
+
+}
+
 func (dev *Device) ListenChannelv2(quit chan int) <-chan []int {
 
 	registers := make(chan []int, 0)
@@ -169,8 +208,9 @@ func (dev *Device) ListenChannelv2(quit chan int) <-chan []int {
 	go func() {
 		defer close(registers)
 		first := true
-		for v := range ch {
-			fmt.Printf("trama: %s\n", v)
+		for vv := range ch {
+			v := string(vv)
+			logs.LogBuild.Printf("trama: %s\n", v)
 			if strings.Contains(v, "RPT") {
 				split := strings.Split(v, ";")
 				if len(split) < 17 {
@@ -192,6 +232,7 @@ func (dev *Device) ListenChannelv2(quit chan int) <-chan []int {
 				if first {
 					dev.reg = data
 					first = false
+					logs.LogInfo.Printf("actual door register: %s\n", v)
 					// continue
 				}
 
@@ -281,14 +322,14 @@ func (dev *Device) ContadorDOWN_puerta2() (int, error) {
 	return temp, nil
 }
 
-func (dev *Device) read() chan string {
+func (dev *Device) read() chan []byte {
 
 	if !dev.ok {
 		// log.Println("Device is closed")
 		return nil
 	}
 	// fmt.Println("reading port")
-	ch := make(chan string)
+	ch := make(chan []byte)
 
 	//buf := make([]byte, 128)
 
@@ -308,9 +349,10 @@ func (dev *Device) read() chan string {
 				countError++
 				continue
 			}
-			data := string(b[:])
+			// data := string(b[:])
 			// fmt.Printf("serial input: %q\n", data)
-			ch <- data
+			// ch <- data
+			ch <- b
 		}
 	}()
 	return ch

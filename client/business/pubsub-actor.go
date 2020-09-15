@@ -1,4 +1,4 @@
-package client
+package business
 
 import (
 	"encoding/json"
@@ -7,8 +7,9 @@ import (
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/dumacp/pubsub"
-	"github.com/dumacp/sonar/client/messages"
+	"github.com/dumacp/sonar/client/logs"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 const (
@@ -22,19 +23,25 @@ type msgGPS struct {
 	data []byte
 }
 
+type MsgSendEvents struct {
+	Data bool
+}
+
 //ActorPubsub actor to send mesages to MQTTT broket
 type ActorPubsub struct {
 	ctx actor.Context
-	*Logger
+	// *logs.Logger
 	clientMqtt MQTT.Client
 	debug      bool
 	chGPS      chan []byte
+	sendEvents bool
 }
 
 //NewPubSubActor create PubSubActor
 func NewPubSubActor() *ActorPubsub {
 	act := &ActorPubsub{}
-	act.Logger = &Logger{}
+	act.sendEvents = true
+	// act.logs.Logger = &logs.Logger{}
 	return act
 }
 
@@ -47,7 +54,7 @@ func (act *ActorPubsub) Receive(ctx actor.Context) {
 	act.ctx = ctx
 	switch msg := ctx.Message().(type) {
 	case *actor.Started:
-		act.initLogs()
+		// act.initlogs.Logs()
 
 		clientMqtt, err := connectMqtt(act.ctx)
 		if err != nil {
@@ -55,40 +62,49 @@ func (act *ActorPubsub) Receive(ctx actor.Context) {
 			panic(err)
 		}
 		act.clientMqtt = clientMqtt
-		act.infoLog.Printf("actor started \"%s\"", ctx.Self().Id)
+		logs.LogInfo.Printf("actor started \"%s\"", ctx.Self().Id)
 	case *actor.Stopping:
 		act.clientMqtt.Disconnect(100)
-	case *messages.Snapshot:
-		reg := &register{}
-		regv := make([]int64, 0)
-		sortInputs := SortMap(msg.Inputs)
-		for _, v := range sortInputs {
-			regv = append(regv, v)
-		}
-		sortOutputs := SortMap(msg.Outputs)
-		for _, v := range sortOutputs {
-			regv = append(regv, v)
-		}
-		reg.Registers = regv
-		data, err := json.Marshal(reg)
+	case *register:
+		data, err := json.Marshal(msg)
 		if err != nil {
-			act.errLog.Println(err)
+			logs.LogError.Println(err)
 			break
 		}
-		act.buildLog.Printf("data: %q", data)
-		token := act.clientMqtt.Publish(topicCounter, 0, false, data)
-		if ok := token.WaitTimeout(3 * time.Second); !ok {
-			act.clientMqtt.Disconnect(100)
-			act.errLog.Panic("MQTT connection failed")
-		}
+		logs.LogBuild.Printf("data: %q", data)
+
+		publish(act.clientMqtt, topicCounter, data, act.sendEvents)
+
+	// case *messages.Snapshot:
+	// 	reg := &register{}
+	// 	regv := make([]int64, 0)
+	// 	sortInputs := SortMap(msg.Inputs)
+	// 	for _, v := range sortInputs {
+	// 		regv = append(regv, v)
+	// 	}
+	// 	sortOutputs := SortMap(msg.Outputs)
+	// 	for _, v := range sortOutputs {
+	// 		regv = append(regv, v)
+	// 	}
+	// 	reg.Registers = regv
+	// 	data, err := json.Marshal(reg)
+	// 	if err != nil {
+	// 		logs.LogError.Println(err)
+	// 		break
+	// 	}
+	// 	logs.LogBuild.Printf("data: %q", data)
+	// 	token := act.clientMqtt.Publish(topicCounter, 0, false, data)
+	// 	if ok := token.WaitTimeout(3 * time.Second); !ok {
+	// 		act.clientMqtt.Disconnect(100)
+	// 		logs.LogError.Panic("MQTT connection failed")
+	// 	}
+	case *MsgSendEvents:
+		act.sendEvents = msg.Data
 	case *msgEvent:
 		// fmt.Printf("event: %s\n", msg.event)
-		act.buildLog.Printf("data: %q", msg)
-		token := act.clientMqtt.Publish(topicEvents, 0, false, msg.data)
-		if ok := token.WaitTimeout(3 * time.Second); !ok {
-			act.clientMqtt.Disconnect(100)
-			act.errLog.Panic("MQTT connection failed")
-		}
+		logs.LogBuild.Printf("data: %q", msg)
+		publish(act.clientMqtt, topicEvents, msg.data, act.sendEvents)
+
 	case *msgPingError:
 		// fmt.Printf("event: %s\n", msg.event)
 		message := &pubsub.Message{
@@ -100,12 +116,19 @@ func (act *ActorPubsub) Receive(ctx actor.Context) {
 		if err != nil {
 			break
 		}
-		act.buildLog.Printf("data: %q", data)
-		token := act.clientMqtt.Publish(topicEvents, 0, false, data)
-		if ok := token.WaitTimeout(3 * time.Second); !ok {
-			act.clientMqtt.Disconnect(100)
-			act.errLog.Panic("MQTT connection failed")
-		}
+		logs.LogBuild.Printf("data: %q", data)
+		publish(act.clientMqtt, topicEvents, data, act.sendEvents)
+
+	}
+}
+func publish(c mqtt.Client, topic string, payload interface{}, send bool) {
+	if !send {
+		logs.LogBuild.Println("data send disable")
+	}
+	token := c.Publish(topicEvents, 0, false, payload)
+	if ok := token.WaitTimeout(3 * time.Second); !ok {
+		c.Disconnect(100)
+		logs.LogError.Panic("MQTT connection failed")
 	}
 }
 

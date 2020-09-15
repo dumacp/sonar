@@ -1,4 +1,4 @@
-package client
+package business
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/dumacp/pubsub"
+	"github.com/dumacp/sonar/client/logs"
 	"github.com/dumacp/sonar/client/messages"
 )
 
@@ -17,19 +18,21 @@ const (
 
 //EventActor type
 type EventActor struct {
-	*Logger
+	// *logs.Logger
 	mem1    *memoryGPS
 	mem2    *memoryGPS
 	puertas map[uint]uint
+	// sendEvents bool
 }
 
 //NewEventActor create EventActor
 func NewEventActor() *EventActor {
 	event := &EventActor{}
-	event.Logger = &Logger{}
+	// event.logs.Logger = &logs.Logger{}
 	event.mem1 = &memoryGPS{}
 	event.mem2 = &memoryGPS{}
 	event.puertas = make(map[uint]uint)
+	// event.sendEvents = true
 	return event
 }
 
@@ -42,20 +45,25 @@ func (act *EventActor) Receive(ctx actor.Context) {
 
 	switch msg := ctx.Message().(type) {
 	case *actor.Started:
-		act.initLogs()
-		act.infoLog.Printf("actor started \"%s\"", ctx.Self().Id)
+		// act.initlogs.Logs()
+		logs.LogInfo.Printf("actor started \"%s\"", ctx.Self().Id)
 	case *messages.Event:
-		act.buildLog.Printf("\"%s\" - event -> '%v'\n", ctx.Self().GetId(), msg)
+		logs.LogBuild.Printf("\"%s\" - event -> '%v'\n", ctx.Self().GetId(), msg)
+		// if !act.sendEvents {
+		// 	logs.LogBuild.Println("send events disable")
+		// 	break
+		// }
 		var event []byte
 		switch msg.Type {
 		case messages.INPUT:
-			event = buildEventPass(ctx, msg, act.mem1, act.mem2, act.puertas, act.Logger)
+			event = buildEventPass(ctx, msg, act.mem1, act.mem2, act.puertas)
 		case messages.OUTPUT:
-			event = buildEventPass(ctx, msg, act.mem1, act.mem2, act.puertas, act.Logger)
+			event = buildEventPass(ctx, msg, act.mem1, act.mem2, act.puertas)
 		case messages.TAMPERING:
-			event = buildEventTampering(ctx, msg, act.mem1, act.mem2, act.puertas, act.Logger)
+			event = buildEventTampering(ctx, msg, act.mem1, act.mem2, act.puertas)
 		}
 		ctx.Send(ctx.Parent(), &msgEvent{data: event})
+
 	case *msgGPS:
 		mem := captureGPS(msg.data)
 		switch mem.typeM {
@@ -67,7 +75,7 @@ func (act *EventActor) Receive(ctx actor.Context) {
 	case *msgDoor:
 		act.puertas[msg.id] = msg.value
 	case *actor.Stopped:
-		act.infoLog.Println("stoped actor")
+		logs.LogWarn.Println("stoped actor")
 	}
 }
 
@@ -98,7 +106,7 @@ func captureGPS(gps []byte) memoryGPS {
 	return memory
 }
 
-func buildEventPass(ctx actor.Context, v *messages.Event, mem1, mem2 *memoryGPS, puerta map[uint]uint, log *Logger) []byte {
+func buildEventPass(ctx actor.Context, v *messages.Event, mem1, mem2 *memoryGPS, puerta map[uint]uint) []byte {
 	tn := time.Now()
 
 	contadores := []int64{0, 0}
@@ -151,14 +159,14 @@ func buildEventPass(ctx actor.Context, v *messages.Event, mem1, mem2 *memoryGPS,
 
 	msg, err := json.Marshal(message)
 	if err != nil {
-		log.errLog.Println(err)
+		logs.LogError.Println(err)
 	}
-	log.buildLog.Printf("%s\n", msg)
+	logs.LogBuild.Printf("%s\n", msg)
 
 	return msg
 }
 
-func buildEventTampering(ctx actor.Context, v *messages.Event, mem1, mem2 *memoryGPS, puerta map[uint]uint, log *Logger) []byte {
+func buildEventTampering(ctx actor.Context, v *messages.Event, mem1, mem2 *memoryGPS, puerta map[uint]uint) []byte {
 	tn := time.Now()
 
 	if v.Type != messages.TAMPERING {
@@ -205,9 +213,9 @@ func buildEventTampering(ctx actor.Context, v *messages.Event, mem1, mem2 *memor
 
 	msg, err := json.Marshal(message)
 	if err != nil {
-		log.errLog.Println(err)
+		logs.LogError.Println(err)
 	}
-	log.buildLog.Printf("%s\n", msg)
+	logs.LogBuild.Printf("%s\n", msg)
 
 	return msg
 }

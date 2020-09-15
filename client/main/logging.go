@@ -1,37 +1,31 @@
 package main
 
 import (
-	"io/ioutil"
 	"log"
 	"log/syslog"
-	"os"
+
+	"github.com/dumacp/sonar/client/logs"
 )
 
-var (
-	warnlog  *log.Logger
-	infolog  *log.Logger
-	buildlog *log.Logger
-	errlog   *log.Logger
-)
-
-func newLog(logStd bool, prefix string, flags int, priority int) *log.Logger {
-	if logStd {
-		return log.New(os.Stderr, prefix, flags)
-	}
+func newLog(logger *logs.Logger, prefix string, flags int, priority int) error {
 
 	logg, err := syslog.NewLogger(syslog.Priority(priority), flags)
 	if err != nil {
-		logg = log.New(os.Stderr, prefix, flags)
+		return err
 	}
-	return logg
+	logger.SetLogError(logg)
+	return nil
 }
 
 func initLogs(debug, logStd bool) {
-	warnlog = newLog(logStd, "[ warn ] ", log.LstdFlags, 4)
-	infolog = newLog(logStd, "[ info ] ", log.LstdFlags, 6)
-	buildlog = newLog(logStd, "[ build ] ", log.LstdFlags, 7)
-	errlog = newLog(logStd, "[ error ] ", log.LstdFlags, 3)
+	if logStd {
+		return
+	}
+	newLog(logs.LogInfo, "[ warn ] ", log.LstdFlags, 4)
+	newLog(logs.LogWarn, "[ info ] ", log.LstdFlags, 6)
+	newLog(logs.LogError, "[ build ] ", log.LstdFlags, 7)
+	newLog(logs.LogBuild, "[ error ] ", log.LstdFlags, 3)
 	if !debug {
-		buildlog.SetOutput(ioutil.Discard)
+		logs.LogBuild.Disable()
 	}
 }

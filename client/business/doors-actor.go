@@ -1,10 +1,11 @@
-package client
+package business
 
 import (
 	"log"
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/dumacp/sonar/contador"
 )
 
 const (
@@ -44,7 +45,7 @@ type msgDoor struct {
 type msgGpioError struct{}
 
 func (act *DoorsActor) listenGpio(quit chan int) {
-	chPuertas, err := gpioNewWatcher(quit, gpioPuerta1, gpioPuerta2)
+	chPuertas, err := contador.GpioNewWatcher(quit, gpioPuerta1, gpioPuerta2)
 	if err != nil {
 		log.Panic(err)
 	}

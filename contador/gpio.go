@@ -1,4 +1,4 @@
-package client
+package contador
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/brian-armstrong/gpio"
 )
 
-func gpioNewWatcher(quit chan int, pins ...uint) (ch chan [2]uint, err error) {
+func GpioNewWatcher(quit chan int, pins ...uint) (ch chan [2]uint, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("Recovered in GPIO: %s", r)
