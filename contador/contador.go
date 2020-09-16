@@ -7,10 +7,12 @@ package contador
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dumacp/sonar/client/logs"
 	"github.com/tarm/serial"
 )
 
@@ -39,7 +41,7 @@ func NewDevice(portName string, baudRate int) (*Device, error) {
 		conf: config,
 		ok:   false,
 		acc:  make([]int, 4),
-		reg:  make([]int, 8),
+		reg:  make([]int, 16),
 	}
 	return dev, nil
 }
@@ -51,6 +53,21 @@ func (dev *Device) Connect() error {
 	}
 	dev.port = s
 	dev.ok = true
+	return nil
+}
+
+func (dev *Device) Send(data []byte) error {
+	n, err := dev.port.Write(data)
+	if err != nil {
+		return err
+	}
+	dev.port.Flush()
+	if err != nil {
+		return err
+	}
+	if len(data) > 0 && n <= 0 {
+		return fmt.Errorf("write serial error, n = %d, data = [%X]", n, data)
+	}
 	return nil
 }
 
@@ -67,7 +84,8 @@ func (dev *Device) ListenRegisters() {
 
 	ch := dev.read()
 	first := true
-	for v := range ch {
+	for vv := range ch {
+		v := string(vv)
 		// log.Printf("trama: %s\n", v)
 		if strings.Contains(v, "RPT") {
 			split := strings.Split(v, ";")
@@ -114,7 +132,8 @@ func (dev *Device) ListenChannel() <-chan []int {
 	ch := dev.read()
 	go func() {
 		first := true
-		for v := range ch {
+		for vv := range ch {
+			v := string(vv)
 			// fmt.Printf("trama: %s\n", v)
 			if strings.Contains(v, "RPT") {
 				split := strings.Split(v, ";")
@@ -170,6 +189,97 @@ func (dev *Device) ListenChannel() <-chan []int {
 	}()
 	return registers
 }
+
+//ListenRawChannel listen raw data
+func (dev *Device) ListenRawChannel(quit chan int) chan []byte {
+	ch := make(chan []byte, 0)
+	go func() {
+		chread := dev.read()
+		defer dev.Close()
+		defer close(ch)
+		for v := range chread {
+			select {
+			case ch <- v:
+			case <-time.After(200 * time.Millisecond):
+			case <-quit:
+				return
+			}
+		}
+	}()
+
+	return ch
+
+}
+
+func (dev *Device) ListenChannelv2(quit chan int) <-chan []int {
+
+	registers := make(chan []int, 0)
+	acc := make([]int, 5)
+	ch := dev.read()
+	go func() {
+		defer close(registers)
+		first := true
+		for vv := range ch {
+			v := string(vv)
+			logs.LogBuild.Printf("trama: %s\n", v)
+			if strings.Contains(v, "RPT") {
+				split := strings.Split(v, ";")
+				if len(split) < 17 {
+					break
+				}
+				data := make([]int, 15)
+				ok := true
+				for i, _ := range data {
+					xint, err := strconv.Atoi(split[i+2])
+					if err != nil {
+						ok = false
+						break
+					}
+					data[i] = xint
+				}
+				if !ok {
+					continue
+				}
+				if first {
+					dev.reg = data
+					first = false
+					logs.LogInfo.Printf("actual door register: %s\n", v)
+					// continue
+				}
+
+				for i := 0; i < 4; i++ {
+					if data[i] >= dev.reg[i] {
+						acc[i] += data[i] - dev.reg[i]
+					} else {
+						if data[i+4] >= dev.reg[i+4] {
+							acc[i] += data[i+4] - dev.reg[i+4]
+						} else {
+							acc[i] = 0
+						}
+					}
+				}
+				if data[10] >= dev.reg[10] {
+					acc[4] = data[11] - dev.reg[11]
+				} else if data[13] >= dev.reg[14] {
+					acc[4] = data[13] - dev.reg[14]
+				} else {
+					acc[4] = 0
+				}
+				dev.reg = data
+				select {
+				case <-quit:
+					dev.Close()
+					return
+				case registers <- dev.reg:
+					acc = []int{0, 0, 0, 0, 0}
+				case <-time.After(time.Second * 1):
+				}
+			}
+		}
+	}()
+	return registers
+}
+
 func (dev *Device) Contadores() ([]int, error) {
 	if !dev.ok {
 		return nil, fmt.Errorf("device Error")
@@ -223,13 +333,14 @@ func (dev *Device) ContadorDOWN_puerta2() (int, error) {
 	return temp, nil
 }
 
-func (dev *Device) read() chan string {
+func (dev *Device) read() chan []byte {
 
 	if !dev.ok {
 		// log.Println("Device is closed")
 		return nil
 	}
-	ch := make(chan string)
+	// fmt.Println("reading port")
+	ch := make(chan []byte)
 
 	//buf := make([]byte, 128)
 
@@ -240,7 +351,7 @@ func (dev *Device) read() chan string {
 		for {
 			b, err := bf.ReadBytes('<')
 			if err != nil {
-				// log.Println(err)
+				log.Println(err)
 				if countError > 3 {
 					dev.Close()
 					return
@@ -249,9 +360,10 @@ func (dev *Device) read() chan string {
 				countError++
 				continue
 			}
-			data := string(b[:])
-			// log.Printf("serial input: %q\n", data)
-			ch <- data
+			// data := string(b[:])
+			// fmt.Printf("serial input: %q\n", data)
+			// ch <- data
+			ch <- b
 		}
 	}()
 	return ch
