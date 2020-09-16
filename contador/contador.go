@@ -110,6 +110,7 @@ func (dev *Device) ListenChannel() <-chan []int {
 
 	registers := make(chan []int, 0)
 	acc := make([]int, 4)
+	lastacc := make([]int, 4)
 	ch := dev.read()
 	go func() {
 		first := true
@@ -148,6 +149,16 @@ func (dev *Device) ListenChannel() <-chan []int {
 					}
 				}
 				dev.reg = data
+			}
+			sumLast := 0
+			sumNow := 0
+			for i, v := range lastacc {
+				sumLast += v
+				sumNow += acc[i]
+			}
+
+			if sumLast == sumNow {
+				continue
 			}
 			select {
 			case registers <- acc:
