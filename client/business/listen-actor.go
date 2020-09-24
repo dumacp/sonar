@@ -92,7 +92,7 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 
 		act.processData(msg.Data)
 		if act.sendConsole {
-			logs.LogBuild.Printf("send to console: %s", msg.Data)
+			logs.LogBuild.Printf("send to console: %q", msg.Data)
 			contador.SendData(act.dev, msg.Data)
 		}
 	case *msgGPS:
@@ -234,7 +234,7 @@ func (act *ListenActor) runNewListen(quit chan int) {
 			// continue
 		}
 		act.processData(v)
-		if act.sendConsole {
+		if act.sendConsole && bytes.Contains(v, []byte("RPTC")) {
 			logs.LogBuild.Printf("send to console: %q", v)
 			contador.SendData(act.dev, []byte(v))
 		}

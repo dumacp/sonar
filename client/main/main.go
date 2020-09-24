@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	showVersion = "1.0.14"
+	showVersion = "1.0.16"
 )
 
 var debug bool
@@ -151,6 +151,7 @@ func main() {
 
 	if simulate {
 		day := time.Now().Day()
+		hora := 171315
 		inputsAll := 220449
 		outputsAll := 24695
 		inputs := 111
@@ -159,6 +160,17 @@ func main() {
 		funcUpdate := func() []byte {
 			data := []byte(fmt.Sprintf(">S;0RPTC%d;%d;%d;10;0;%d;%d;0;0;10;8;3;0;0;0;34574;*",
 				day, inputsAll, outputsAll, inputs, outputs))
+			csum := byte(0)
+			for _, v := range data {
+				csum ^= v
+			}
+			data = append(data, []byte(fmt.Sprintf("%02X<", csum))...)
+			data = append(data, []byte("\r\n")...)
+			return data
+		}
+		funcGPS := func() []byte {
+			data := []byte(fmt.Sprintf(">S;0$GPRMC,%d.000,A,0613.2526,N,07534.2606,W,0.00,323.36,240920,,,D;*",
+				hora))
 			csum := byte(0)
 			for _, v := range data {
 				csum ^= v
@@ -180,6 +192,8 @@ func main() {
 				case <-tick1.C:
 					// logs.LogBuild.Println(funcUpdate())
 					rootContext.Send(pidCounting, &business.MsgToTest{Data: funcUpdate()})
+					rootContext.Send(pidCounting, &business.MsgToTest{Data: funcGPS()})
+					hora++
 				case <-tick2.C:
 					inputs++
 					inputsAll++

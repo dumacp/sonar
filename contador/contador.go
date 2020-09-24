@@ -61,10 +61,10 @@ func (dev *Device) Send(data []byte) error {
 	if err != nil {
 		return err
 	}
-	dev.port.Flush()
-	if err != nil {
-		return err
-	}
+	//dev.port.Flush()
+	//if err != nil {
+	//	return err
+	//}
 	if len(data) > 0 && n <= 0 {
 		return fmt.Errorf("write serial error, n = %d, data = [%X]", n, data)
 	}
