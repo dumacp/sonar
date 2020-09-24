@@ -109,7 +109,7 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 		}
 		data = append(data, []byte(fmt.Sprintf("%02X<", csum))...)
 		data = append(data, []byte("\r\n")...)
-		logs.LogBuild.Printf("send to console ->, %s", data)
+		logs.LogBuild.Printf("send to console ->, %q", data)
 		contador.SendData(act.dev, data)
 	}
 }
@@ -235,7 +235,7 @@ func (act *ListenActor) runNewListen(quit chan int) {
 		}
 		act.processData(v)
 		if act.sendConsole {
-			logs.LogBuild.Printf("send to console: %s", v)
+			logs.LogBuild.Printf("send to console: %q", v)
 			contador.SendData(act.dev, []byte(v))
 		}
 	}
