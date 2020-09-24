@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	showVersion = "1.0.12"
+	showVersion = "1.0.14"
 )
 
 var debug bool
@@ -97,6 +97,8 @@ func main() {
 	propsCounting := actor.PropsFromProducer(func() actor.Actor { return counting })
 	if !disablePersistence {
 		propsCounting = propsCounting.WithReceiverMiddleware(persistence.Using(provider))
+	} else {
+		counting.DisablePersistence(true)
 	}
 
 	pidCounting, err := rootContext.SpawnNamed(propsCounting, "counting")
@@ -140,7 +142,7 @@ func main() {
 	logs.LogInfo.Printf("back door counter START --  version: %s\n", showVersion)
 
 	go func() {
-		t1 := time.NewTicker(5 * time.Second)
+		t1 := time.NewTicker(20 * time.Second)
 		defer t1.Stop()
 		for range t1.C {
 			rootContext.Send(pidCounting, &business.MsgSendRegisters{})
