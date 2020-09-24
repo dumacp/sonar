@@ -85,10 +85,10 @@ func (a *CountingActor) SetGPStoConsole(gpsConsole bool) {
 	a.gpsToConsole = gpsConsole
 }
 
-// //DisablePersistence disable persistence
-// func (a *CountingActor) DisablePersistence(disable bool) {
-// 	a.disablePersistence = disable
-// }
+//DisablePersistence disable persistence
+func (a *CountingActor) DisablePersistence(disable bool) {
+	a.disablePersistence = disable
+}
 
 // type Snapshot struct {
 // 	Inputs  uint32
@@ -108,9 +108,8 @@ type MsgSendRegisters struct{}
 func (a *CountingActor) Receive(ctx actor.Context) {
 	switch msg := ctx.Message().(type) {
 	case *actor.Started:
-		if len(a.Mixin.Name()) <= 0 {
+		if a.disablePersistence {
 			logs.LogInfo.Println("disable persistence")
-			a.disablePersistence = true
 		}
 		a.inputs = make(map[int32]int64)
 		a.outputs = make(map[int32]int64)
@@ -183,9 +182,11 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 			RawInputs:  a.rawInputs,
 			RawOutputs: a.rawOutputs,
 		}
-		a.PersistSnapshot(snap)
+		if !a.disablePersistence {
+			a.PersistSnapshot(snap)
+		}
 		// ctx.Send(a.pubsub, snap)
-		if reg := registers(a.inputs, a.outputs, a.counterType); reg != nil {
+		if reg := registersMap(a.inputs, a.outputs, a.counterType); reg != nil {
 			ctx.Send(a.pubsub, reg)
 		}
 
@@ -201,7 +202,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		// 	RawOutputs: a.rawOutputs,
 		// }
 		// ctx.Send(a.pubsub, snap)
-		if reg := registers(a.inputs, a.outputs, a.counterType); reg != nil {
+		if reg := registersMap(a.inputs, a.outputs, a.counterType); reg != nil {
 			// log.Printf("registers: %v", reg)
 			ctx.Send(a.pubsub, reg)
 		}
@@ -225,17 +226,19 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 	case *persistence.ReplayComplete:
 		logs.LogInfo.Printf("replay completed, internal state changed to:\n\tinputs -> '%v', outputs -> '%v'\n",
 			a.inputs, a.outputs)
-		// snap := &messages.Snapshot{
-		// 	Inputs:     a.inputs,
-		// 	Outputs:    a.outputs,
-		// 	RawInputs:  a.rawInputs,
-		// 	RawOutputs: a.rawOutputs,
-		// }
-		// a.PersistSnapshot(snap)
-		// ctx.Send(a.pubsub, snap)
-		if reg := registers(a.inputs, a.outputs, a.counterType); reg != nil {
-			ctx.Send(a.pubsub, reg)
+		snap := &messages.Snapshot{
+			Inputs:     a.inputs,
+			Outputs:    a.outputs,
+			RawInputs:  a.rawInputs,
+			RawOutputs: a.rawOutputs,
 		}
+		if !a.disablePersistence {
+			a.PersistSnapshot(snap)
+		}
+		// ctx.Send(a.pubsub, snap)
+		// if reg := registersMap(a.inputs, a.outputs, a.counterType); reg != nil {
+		// 	ctx.Send(a.pubsub, reg)
+		// }
 
 	case *MsgSendEvents:
 		ctx.Send(a.pubsub, msg)
@@ -245,13 +248,16 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 			scenario := "received replayed event"
 			logs.LogBuild.Printf("%s, internal state changed to\n\tinputs -> '%v', outputs -> '%v'\n",
 				scenario, a.inputs, a.outputs)
-		} else {
-			if !a.disablePersistence {
-				a.PersistReceive(msg)
-			}
+		}
+
+		if a.disablePersistence || !a.Recovering() {
 			scenario := "received new message"
 			logs.LogBuild.Printf("%s, internal state changed to\n\tinputs -> '%v', outputs -> '%v'\n",
 				scenario, a.inputs, a.outputs)
+		}
+
+		if !a.disablePersistence && !a.Recovering() {
+			a.PersistReceive(msg)
 		}
 		// a.buildlogs.Log.Printf("data ->'%v', rawinputs -> '%v', rawoutputs -> '%v' \n",
 		// 	msg.GetValue(), a.rawInputs, a.rawOutputs)
@@ -378,6 +384,23 @@ func sendEvent(ctx actor.Context, dts *actor.PID, tp int, id int32, value int64,
 	ctx.Send(dts, &messages.Event{Id: idPuerta, Type: msgType, Value: value})
 }
 
+func registersMap(inputs, outputs map[int32]int64, tp int) *registerMap {
+	reg := &registerMap{}
+
+	if tp == 2 {
+		reg.Inputs1, _ = inputs[0]
+		reg.Outputs1, _ = outputs[0]
+		reg.Inputs0, _ = inputs[1]
+		reg.Outputs0, _ = outputs[1]
+
+	} else {
+		reg.Inputs0, _ = inputs[0]
+		reg.Outputs0, _ = outputs[0]
+		reg.Inputs1, _ = inputs[1]
+		reg.Outputs1, _ = outputs[1]
+	}
+	return reg
+}
 func registers(inputs, outputs map[int32]int64, tp int) *register {
 	// log.Printf("counter type = %d", tp)
 	reg := &register{}
