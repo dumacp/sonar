@@ -16,7 +16,7 @@ const (
 	clietnName  = "go-camera-actor"
 	topicEvents = "EVENTS/backcounter"
 	// topicScene   = "EVENTS/scene"
-	topicCounter = "COUNTERSDOOR"
+	topicCounter = "COUNTERSMAPDOOR"
 )
 
 type msgGPS struct {
@@ -49,6 +49,13 @@ type register struct {
 	Registers []int64 `json:"registers"`
 }
 
+type registerMap struct {
+	Inputs0  int64 `json:"inputs0"`
+	Inputs1  int64 `json:"inputs1"`
+	Outputs0 int64 `json:"outputs0"`
+	Outputs1 int64 `json:"outputs1"`
+}
+
 //Receive func Receive to actor
 func (act *ActorPubsub) Receive(ctx actor.Context) {
 	act.ctx = ctx
@@ -66,6 +73,15 @@ func (act *ActorPubsub) Receive(ctx actor.Context) {
 	case *actor.Stopping:
 		act.clientMqtt.Disconnect(100)
 	case *register:
+		data, err := json.Marshal(msg)
+		if err != nil {
+			logs.LogError.Println(err)
+			break
+		}
+		logs.LogBuild.Printf("data: %q", data)
+
+		publish(act.clientMqtt, topicCounter, data, act.sendEvents)
+	case *registerMap:
 		data, err := json.Marshal(msg)
 		if err != nil {
 			logs.LogError.Println(err)
@@ -124,8 +140,9 @@ func (act *ActorPubsub) Receive(ctx actor.Context) {
 func publish(c mqtt.Client, topic string, payload interface{}, send bool) {
 	if !send {
 		logs.LogBuild.Println("data send disable")
+		return
 	}
-	token := c.Publish(topicEvents, 0, false, payload)
+	token := c.Publish(topic, 0, false, payload)
 	if ok := token.WaitTimeout(3 * time.Second); !ok {
 		c.Disconnect(100)
 		logs.LogError.Panic("MQTT connection failed")
