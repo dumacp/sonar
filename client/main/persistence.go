@@ -33,7 +33,7 @@ var parseSnapshot = func(src []byte) proto.Message {
 		log.Println(err)
 		return nil
 	}
-	log.Printf("recovery SNAP: %v", i)
+	//log.Printf("recovery SNAP: %v", i)
 	return i
 }
 

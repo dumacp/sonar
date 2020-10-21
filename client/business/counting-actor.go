@@ -90,19 +90,16 @@ func (a *CountingActor) DisablePersistence(disable bool) {
 	a.disablePersistence = disable
 }
 
-// type Snapshot struct {
-// 	Inputs  uint32
-// 	Outputs uint32
-// }
-
-// func (snap *Snapshot) Reset() { *snap = Snapshot{} }
-// func (snap *Snapshot) String() string {
-// 	return fmt.Sprintf("{Inputs: %d, Outputs: %d}", snap.Inputs, snap.Outputs)
-// }
-// func (snap *Snapshot) ProtoMessage() {}
-
 //MsgSendRegisters messages to send registers to pubsub
 type MsgSendRegisters struct{}
+
+//MsgInitCounters message to init counter database
+type MsgInitCounters struct {
+	Inputs0  int64
+	Outputs0 int64
+	Inputs1  int64
+	Outputs1 int64
+}
 
 //Receive function to receive message in actor
 func (a *CountingActor) Receive(ctx actor.Context) {
@@ -119,13 +116,6 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		logs.LogInfo.Printf("actor started \"%s\"", ctx.Self().Id)
 
 		pubsub := NewPubSubActor()
-		// pubsub.Setlogs.LogError(a.errlogs.Log).
-		// 	Setlogs.LogWarn(a.warnlogs.Log).
-		// 	Setlogs.LogInfo(a.infologs.Log).
-		// 	Setlogs.LogBuild(a.buildlogs.Log)
-		// if a.debug {
-		// 	pubsub.WithDebug()
-		// }
 		props1 := actor.PropsFromFunc(pubsub.Receive)
 		pid1, err := ctx.SpawnNamed(props1, "pubsub")
 		if err != nil {
@@ -134,13 +124,6 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		a.pubsub = pid1
 
 		events := NewEventActor()
-		// events.Setlogs.LogError(a.errlogs.Log).
-		// 	Setlogs.LogWarn(a.warnlogs.Log).
-		// 	Setlogs.LogInfo(a.infologs.Log).
-		// 	Setlogs.LogBuild(a.buildlogs.Log)
-		// if a.debug {
-		// 	events.WithDebug()
-		// }
 		props2 := actor.PropsFromProducer(func() actor.Actor { return events })
 		pid2, err := ctx.SpawnNamed(props2, "events")
 		if err != nil {
@@ -148,29 +131,21 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		}
 		a.events = pid2
 
-		props3 := actor.PropsFromProducer(func() actor.Actor { return &DoorsActor{} })
-		pid3, err := ctx.SpawnNamed(props3, "doors")
-		if err != nil {
-			logs.LogError.Panicln(err)
+		if a.listenner != nil {
+			props3 := actor.PropsFromProducer(func() actor.Actor { return &DoorsActor{} })
+			pid3, err := ctx.SpawnNamed(props3, "doors")
+			if err != nil {
+				logs.LogError.Panicln(err)
+			}
+			a.doors = pid3
 		}
-		a.doors = pid3
 
-		// props4 := actor.PropsFromProducer(func() actor.Actor { return &PingActor{} })
-		// pid4, err := ctx.SpawnNamed(props4, "ping")
-		// if err != nil {
-		// 	a.errlogs.Log.Panicln(err)
-		// }
-		// a.ping = pid4
-
-		// a.listenner.Setlogs.LogError(a.errlogs.Log).Setlogs.LogWarn(a.warnlogs.Log).Setlogs.LogInfo(a.infologs.Log).Setlogs.LogBuild(a.buildlogs.Log)
-		// if a.debug {
-		// 	a.listenner.WithDebug()
-		// }
-
-		propsListen := actor.PropsFromFunc(a.listenner.Receive)
-		a.listen, err = ctx.SpawnNamed(propsListen, "listenner")
-		if err != nil {
-			logs.LogError.Panicln(err)
+		if a.listenner != nil {
+			propsListen := actor.PropsFromFunc(a.listenner.Receive)
+			a.listen, err = ctx.SpawnNamed(propsListen, "listenner")
+			if err != nil {
+				logs.LogError.Panicln(err)
+			}
 		}
 
 	case *persistence.RequestSnapshot:
@@ -190,6 +165,21 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 			ctx.Send(a.pubsub, reg)
 		}
 
+	case *MsgInitCounters:
+		inputs := make(map[int32]int64)
+		outputs := make(map[int32]int64)
+		inputs[0] = msg.Inputs0
+		inputs[1] = msg.Inputs1
+		outputs[0] = msg.Outputs0
+		outputs[1] = msg.Outputs1
+		snap := &messages.Snapshot{
+			Inputs:  inputs,
+			Outputs: outputs,
+		}
+		if !a.disablePersistence {
+			a.PersistSnapshot(snap)
+		}
+		logs.LogBuild.Printf("init counters -> %v", snap)
 	case *MsgSendRegisters:
 
 		if verifySum(a.outputs) <= 0 && verifySum(a.inputs) <= 0 {
@@ -220,12 +210,11 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		if msg.GetRawOutputs() != nil {
 			a.rawOutputs = msg.GetRawOutputs()
 		}
-		logs.LogInfo.Printf("recovered from snapshot, internal state changed to:\n\tinputs -> '%v', outputs -> '%v', rawInputs -> %v, rawOutpts -> %v\n",
+		logs.LogInfo.Printf("recover snapshot, internal state changed to:\n\tinputs -> '%v', outputs -> '%v'\n\trawImputs: %v, rawOutputs: %v",
 			a.inputs, a.outputs, a.rawInputs, a.rawOutputs)
-		// ctx.Send(a.pubsub, msg)
 	case *persistence.ReplayComplete:
-		logs.LogInfo.Printf("replay completed, internal state changed to:\n\tinputs -> '%v', outputs -> '%v'\n",
-			a.inputs, a.outputs)
+		logs.LogInfo.Printf("replay completed, internal state changed to:\n\tinputs -> '%v', outputs -> '%v'\n\trawImputs: %v, rawOutputs: %v",
+			a.inputs, a.outputs, a.rawInputs, a.rawOutputs)
 		snap := &messages.Snapshot{
 			Inputs:     a.inputs,
 			Outputs:    a.outputs,
@@ -246,14 +235,14 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		if !a.disablePersistence && a.Recovering() {
 			// a.flagRecovering = true
 			scenario := "received replayed event"
-			logs.LogBuild.Printf("%s, internal state changed to\n\tinputs -> '%v', outputs -> '%v'\n",
-				scenario, a.inputs, a.outputs)
+			logs.LogBuild.Printf("%s -> %v, internal state changed to\n\tinputs -> '%v', outputs -> '%v'\n",
+				scenario, msg, a.inputs, a.outputs)
 		}
 
-		if a.disablePersistence || !a.Recovering() {
+		if !a.disablePersistence && !a.Recovering() {
 			scenario := "received new message"
-			logs.LogBuild.Printf("%s, internal state changed to\n\tinputs -> '%v', outputs -> '%v'\n",
-				scenario, a.inputs, a.outputs)
+			logs.LogBuild.Printf("%s -> %v, internal state changed to\n\tinputs -> '%v', outputs -> '%v'\n",
+				scenario, msg, a.inputs, a.outputs)
 		}
 
 		if !a.disablePersistence && !a.Recovering() {
@@ -278,7 +267,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 				// 	sendEvent(ctx, a.events, a.counterType, id, 1, messages.INPUT)
 				// 	// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: 1})
 				// }
-			} else if diff > 0 {
+			} else if diff > 0 && diff < 20 {
 				if v, ok := a.puertas[uint(id)]; a.disableDoorGpio || !ok || v == a.openState[id] {
 					a.inputs[id] += diff
 					if a.disablePersistence || !a.Recovering() {
@@ -286,10 +275,10 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 						// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: diff})
 					}
 				}
-			} else if diff < 0 {
+			} else if diff > -5 && diff < 0 {
 				// a.inputs[id] += msg.GetValue()
 				if a.disablePersistence || !a.Recovering() {
-					sendEvent(ctx, a.events, a.counterType, id, msg.GetValue(), messages.INPUT)
+					sendEvent(ctx, a.events, a.counterType, id, Abs(diff), messages.INPUT)
 					// ctx.Send(a.events, msg)
 				}
 			}
@@ -309,7 +298,7 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 				// 	sendEvent(ctx, a.events, a.counterType, id, 1, messages.OUTPUT)
 				// 	// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: 1})
 				// }
-			} else if diff > 0 {
+			} else if diff > 0 && diff < 20 {
 				if v, ok := a.puertas[uint(id)]; a.disableDoorGpio || !ok || v == a.openState[id] {
 					a.outputs[id] += diff
 					if a.disablePersistence || !a.Recovering() {
@@ -317,10 +306,10 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 						// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: diff})
 					}
 				}
-			} else if diff < 0 {
+			} else if diff > -5 && diff < 0 {
 				// a.outputs[id] += msg.GetValue()
 				if a.disablePersistence || !a.Recovering() {
-					sendEvent(ctx, a.events, a.counterType, id, msg.GetValue(), messages.OUTPUT)
+					sendEvent(ctx, a.events, a.counterType, id, Abs(diff), messages.OUTPUT)
 					// ctx.Send(a.events, msg)
 				}
 			}
@@ -431,4 +420,11 @@ func registers(inputs, outputs map[int32]int64, tp int) *register {
 	}
 	reg.Registers = regv
 	return reg
+}
+
+func Abs(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

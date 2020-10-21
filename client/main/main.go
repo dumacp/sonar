@@ -5,6 +5,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"regexp"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -12,11 +15,12 @@ import (
 	"github.com/AsynkronIT/protoactor-go/persistence"
 	"github.com/dumacp/sonar/client/business"
 	"github.com/dumacp/sonar/client/logs"
+	"github.com/dumacp/sonar/client/messages"
 	"golang.org/x/exp/errors/fmt"
 )
 
 const (
-	showVersion = "1.0.16"
+	showVersion = "1.0.17"
 )
 
 var debug bool
@@ -35,6 +39,7 @@ var sendGpsToConsole bool
 var simulate bool
 var mqtt bool
 var disablePersistence bool
+var initCounters string
 
 func init() {
 	flag.BoolVar(&debug, "debug", false, "debug enable")
@@ -43,6 +48,11 @@ func init() {
 	flag.BoolVar(&logStd, "logStd", false, "log in stderr")
 	flag.StringVar(&pathdb, "pathdb", "/SD/boltdbs/countingdb", "socket to listen events")
 	flag.StringVar(&socket, "port", "/dev/ttyS2", "serial port")
+	flag.StringVar(&initCounters, "initCounters", "", `init counters in database, example: "101 11 202 22"
+	101 -> inputs front door,
+	11  -> outputs front door,
+	202 -> inputs back door,
+	22  -> outputs back door`)
 	flag.IntVar(&baudRate, "baud", 19200, "baudrate")
 	flag.IntVar(&typeCounterDoor, "typeCounterDoor", 0, "0: two counters (front and back), 1: front counter, 2: back counter")
 	flag.IntVar(&loglevel, "loglevel", 0, "level log")
@@ -62,6 +72,7 @@ func main() {
 		fmt.Printf("version: %s\n", showVersion)
 		os.Exit(2)
 	}
+
 	initLogs(debug, logStd)
 
 	var provider *provider
@@ -82,7 +93,13 @@ func main() {
 	// 	listenner.WithDebug()
 	// }
 
-	counting := business.NewCountingActor(listenner)
+	counting := new(business.CountingActor)
+	if len(initCounters) > 0 {
+
+		counting = business.NewCountingActor(nil)
+	} else {
+		counting = business.NewCountingActor(listenner)
+	}
 	counting.SetZeroOpenStateDoor0(isZeroOpenStateDoor0)
 	counting.SetZeroOpenStateDoor1(isZeroOpenStateDoor1)
 	counting.DisableDoorGpioListen(disableDoorGpioListen)
@@ -106,27 +123,30 @@ func main() {
 		logs.LogError.Println(err)
 	}
 
-	if mqtt {
+	if mqtt || len(initCounters) > 0 {
 		rootContext.Send(pidCounting, &business.MsgSendEvents{Data: false})
 	}
-
-	// listenner := client.NewListen(socket, baudRate, pidCounting)
-	// listenner.SetLogError(errlog).SetLogWarn(warnlog).SetLogInfo(infolog).SetLogBuild(buildlog)
-	// if debug {
-	// 	listenner.WithDebug()
-	// }
-
-	// propsListen := actor.PropsFromFunc(listenner.Receive)
-	// pidListen, err := rootContext.SpawnNamed(propsListen, "listenner")
-	// if err != nil {
-	// 	errlog.Println(err)
-	// }
-
-	// time.Sleep(1 * time.Second)
-
-	// rootContext.Send(pidListen, &messages.CountingActor{
-	// 	Address: pidCounting.Address,
-	// 	ID:      pidCounting.Id})
+	if len(initCounters) > 0 {
+		space := regexp.MustCompile(`\s+`)
+		s := space.ReplaceAllString(initCounters, " ")
+		spplit := strings.Split(s, " ")
+		if len(spplit) != 4 {
+			log.Fatalln("init error, len initCounter is wrong. Len allow is 4, example -> \"0 0 0 0\"")
+		}
+		data := make([]int64, 0)
+		for _, sv := range spplit {
+			v, err := strconv.Atoi(sv)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			data = append(data, int64(v))
+		}
+		rootContext.Send(pidCounting, &business.MsgInitCounters{data[0], data[1], data[2], data[3]})
+		rootContext.Send(pidCounting, &messages.Event{Type: 0, Value: 160, Id: 0})
+		time.Sleep(1 * time.Second)
+		rootContext.PoisonFuture(pidCounting).Wait()
+		log.Fatalln("database is initialize")
+	}
 
 	time.Sleep(3 * time.Second)
 
