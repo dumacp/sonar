@@ -276,7 +276,9 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 					}
 				}
 			} else if diff > -5 && diff < 0 {
-				// a.inputs[id] += msg.GetValue()
+				logs.LogWarn.Printf("diff is negative -> msg.GetValue(): %d, a.rawInputs[id]: %d", msg.GetValue(), a.rawInputs[id])
+				ctx.Send(a.listen, &MsgLogRequest{})
+				a.inputs[id] += Abs(diff)
 				if a.disablePersistence || !a.Recovering() {
 					sendEvent(ctx, a.events, a.counterType, id, Abs(diff), messages.INPUT)
 					// ctx.Send(a.events, msg)
@@ -308,6 +310,9 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 				}
 			} else if diff > -5 && diff < 0 {
 				// a.outputs[id] += msg.GetValue()
+				logs.LogWarn.Printf("diff is negative -> msg.GetValue(): %d, a.rawOutputs[id]: %d", msg.GetValue(), a.rawOutputs[id])
+				ctx.Send(a.listen, &MsgLogRequest{})
+				a.outputs[id] += Abs(diff)
 				if a.disablePersistence || !a.Recovering() {
 					sendEvent(ctx, a.events, a.counterType, id, Abs(diff), messages.OUTPUT)
 					// ctx.Send(a.events, msg)
@@ -329,7 +334,8 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		// 	}
 		// 	a.PersistSnapshot(snap)
 		// }
-
+	case *MsgLogResponse:
+		logs.LogWarn.Printf("log frame counters -> %s", msg.Value)
 	case *msgPingError:
 		logs.LogWarn.Printf("counter keep alive error")
 		ctx.Send(a.pubsub, msg)

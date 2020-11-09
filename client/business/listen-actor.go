@@ -2,6 +2,7 @@ package business
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,11 @@ import (
 
 type MsgToTest struct {
 	Data []byte
+}
+
+type MsgLogRequest struct{}
+type MsgLogResponse struct {
+	Value []byte
 }
 
 //ListenActor actor to listen events
@@ -38,6 +44,7 @@ type ListenActor struct {
 	// counterType int
 	sendConsole bool
 	countersMem []int64
+	queue       *list.List
 }
 
 //NewListen create listen actor
@@ -50,6 +57,7 @@ func NewListen(socket string, baudRate int) *ListenActor {
 	act.quit = make(chan int, 0)
 	act.timeFailure = 3
 	act.countersMem = make([]int64, 0)
+	act.queue = list.New()
 	return act
 }
 
@@ -95,6 +103,17 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 			logs.LogBuild.Printf("send to console: %q", msg.Data)
 			contador.SendData(act.dev, msg.Data)
 		}
+	case *MsgLogRequest:
+		if act.queue.Len() > 0 {
+			e := act.queue.Front()
+			ev := e
+			for ev != nil {
+				if v, ok := ev.Value.([]byte); ok {
+					ctx.Send(ctx.Sender(), &MsgLogResponse{Value: v})
+				}
+				ev = e.Next()
+			}
+		}
 	case *msgGPS:
 		// if !act.sendGPS {
 		// 	break
@@ -120,6 +139,11 @@ func (act *ListenActor) processData(v []byte) {
 
 	switch {
 	case bytes.Contains(v, []byte("RPT")):
+		act.queue.PushBack(v)
+		if act.queue.Len() > 5 {
+			e := act.queue.Front()
+			act.queue.Remove(e)
+		}
 
 		split := strings.Split(string(v), ";")
 		// logs.LogBuild.Printf("split, len = %d -> %v", len(split), split)
@@ -227,16 +251,18 @@ func (act *ListenActor) runNewListen(quit chan int) {
 	for v := range chlisten {
 
 		logs.LogBuild.Printf("trama: %s\n", v)
-		if first {
-			//dev.reg = data
-			first = false
-			logs.LogInfo.Printf("actual door register: %s\n", v)
-			// continue
-		}
 		act.processData(v)
-		if act.sendConsole && bytes.Contains(v, []byte("RPTC")) {
+		//if act.sendConsole && bytes.Contains(v, []byte("RPTC")) {
+		if bytes.Contains(v, []byte("RPTC")) {
+			if first {
+				first = false
+				logs.LogInfo.Printf("actual door register: %s\n", v)
+			}
 			logs.LogBuild.Printf("send to console: %q", v)
-			contador.SendData(act.dev, []byte(v))
+
+			if act.sendConsole {
+				contador.SendData(act.dev, []byte(v))
+			}
 		}
 	}
 }
