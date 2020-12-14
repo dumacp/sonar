@@ -36,6 +36,10 @@ func NewEventActor() *EventActor {
 	return event
 }
 
+type msgEventCounter struct {
+	data []byte
+}
+
 type msgEvent struct {
 	data []byte
 }
@@ -57,12 +61,14 @@ func (act *EventActor) Receive(ctx actor.Context) {
 		switch msg.Type {
 		case messages.INPUT:
 			event = buildEventPass(ctx, msg, act.mem1, act.mem2, act.puertas)
+			ctx.Send(ctx.Parent(), &msgEventCounter{data: event})
 		case messages.OUTPUT:
 			event = buildEventPass(ctx, msg, act.mem1, act.mem2, act.puertas)
+			ctx.Send(ctx.Parent(), &msgEventCounter{data: event})
 		case messages.TAMPERING:
 			event = buildEventTampering(ctx, msg, act.mem1, act.mem2, act.puertas)
+			ctx.Send(ctx.Parent(), &msgEvent{data: event})
 		}
-		ctx.Send(ctx.Parent(), &msgEvent{data: event})
 
 	case *msgGPS:
 		mem := captureGPS(msg.data)
@@ -201,13 +207,15 @@ func buildEventTampering(ctx actor.Context, v *messages.Event, mem1, mem2 *memor
 	}
 
 	val := struct {
-		Coord string `json:"coord"`
-		ID    int32  `json:"id"`
-		State uint   `json:"state"`
+		Coord    string  `json:"coord"`
+		ID       int32   `json:"id"`
+		State    uint    `json:"state"`
+		Counters []int64 `json:"counters"`
 	}{
 		frame,
 		v.Id,
 		doorState,
+		[]int64{0, 0},
 	}
 	message.Value = val
 

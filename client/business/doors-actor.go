@@ -47,6 +47,7 @@ type msgGpioError struct{}
 func (act *DoorsActor) listenGpio(quit chan int) {
 	chPuertas, err := contador.GpioNewWatcher(quit, gpioPuerta1, gpioPuerta2)
 	if err != nil {
+		log.Println(err)
 		log.Panic(err)
 	}
 	go func() {

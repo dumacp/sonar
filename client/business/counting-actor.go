@@ -132,12 +132,14 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 		a.events = pid2
 
 		if a.listenner != nil {
-			props3 := actor.PropsFromProducer(func() actor.Actor { return &DoorsActor{} })
-			pid3, err := ctx.SpawnNamed(props3, "doors")
-			if err != nil {
-				logs.LogError.Panicln(err)
+			if !a.disableDoorGpio {
+				props3 := actor.PropsFromProducer(func() actor.Actor { return &DoorsActor{} })
+				pid3, err := ctx.SpawnNamed(props3, "doors")
+				if err != nil {
+					logs.LogError.Panicln(err)
+				}
+				a.doors = pid3
 			}
-			a.doors = pid3
 		}
 
 		if a.listenner != nil {
@@ -353,6 +355,9 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 	case *msgEvent:
 		// a.buildlogs.Log.Printf("\"%s\" - msg: '%q'\n", ctx.Self().GetId(), msg)
 		ctx.Send(a.pubsub, msg)
+	case *msgEventCounter:
+		// a.buildlogs.Log.Printf("\"%s\" - msg: '%q'\n", ctx.Self().GetId(), msg)
+		ctx.Send(a.pubsub, msg)
 	case *actor.Terminated:
 		logs.LogWarn.Printf("actor terminated: %s", msg.GetWho().GetAddress())
 	case *actor.Stopped:
@@ -385,8 +390,8 @@ func registersMap(inputs, outputs map[int32]int64, tp int) *registerMap {
 	if tp == 2 {
 		reg.Inputs1, _ = inputs[0]
 		reg.Outputs1, _ = outputs[0]
-		reg.Inputs0, _ = inputs[1]
-		reg.Outputs0, _ = outputs[1]
+		// reg.Inputs0, _ = inputs[1]
+		// reg.Outputs0, _ = outputs[1]
 
 	} else {
 		reg.Inputs0, _ = inputs[0]

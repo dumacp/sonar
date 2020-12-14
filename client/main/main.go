@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	showVersion = "1.0.18"
+	showVersion = "1.0.22"
 )
 
 var debug bool
@@ -88,6 +88,7 @@ func main() {
 
 	listenner := business.NewListen(socket, baudRate)
 	listenner.SendToConsole(sendGpsToConsole)
+	listenner.Test(simulate)
 	// listenner.SetLogError(errlog).SetLogWarn(warnlog).SetLogInfo(infolog).SetLogBuild(buildlog)
 	// if debug {
 	// 	listenner.WithDebug()
@@ -95,7 +96,6 @@ func main() {
 
 	counting := new(business.CountingActor)
 	if len(initCounters) > 0 {
-
 		counting = business.NewCountingActor(nil)
 	} else {
 		counting = business.NewCountingActor(listenner)
@@ -212,7 +212,9 @@ func main() {
 				case <-tick1.C:
 					// logs.LogBuild.Println(funcUpdate())
 					rootContext.Send(pidCounting, &business.MsgToTest{Data: funcUpdate()})
-					rootContext.Send(pidCounting, &business.MsgToTest{Data: funcGPS()})
+					if sendGpsToConsole {
+						rootContext.Send(pidCounting, &business.MsgToTest{Data: funcGPS()})
+					}
 					hora++
 				case <-tick2.C:
 					inputs++

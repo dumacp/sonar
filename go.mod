@@ -15,3 +15,5 @@ require (
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	golang.org/x/exp/errors v0.0.0-20200917184745-18d7dbdd5567
 )
+
+replace github.com/brian-armstrong/gpio => /home/duma/go/src/github.com/brian-armstrong/gpio

@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	clietnName  = "go-camera-actor"
-	topicEvents = "EVENTS/backcounter"
+	clietnName        = "go-camera-actor"
+	topicCounterEvent = "EVENTS/backcounter"
+	topicEvents       = "EVENTS/counterevents"
 	// topicScene   = "EVENTS/scene"
 	topicCounter = "COUNTERSMAPDOOR"
 )
@@ -116,6 +117,11 @@ func (act *ActorPubsub) Receive(ctx actor.Context) {
 	// 	}
 	case *MsgSendEvents:
 		act.sendEvents = msg.Data
+	case *msgEventCounter:
+		// fmt.Printf("event: %s\n", msg.event)
+		logs.LogBuild.Printf("data: %q", msg)
+		publish(act.clientMqtt, topicCounterEvent, msg.data, act.sendEvents)
+
 	case *msgEvent:
 		// fmt.Printf("event: %s\n", msg.event)
 		logs.LogBuild.Printf("data: %q", msg)

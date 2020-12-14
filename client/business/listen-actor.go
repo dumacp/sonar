@@ -27,6 +27,7 @@ type MsgLogResponse struct {
 type ListenActor struct {
 	// *logs.Logger
 	context actor.Context
+	test    bool
 	// countingActor *actor.PID
 	enters0Before int64
 	exits0Before  int64
@@ -65,6 +66,10 @@ func (act *ListenActor) SendToConsole(send bool) {
 	act.sendConsole = send
 }
 
+func (act *ListenActor) Test(test bool) {
+	act.test = test
+}
+
 //Receive func Receive in actor
 func (act *ListenActor) Receive(ctx actor.Context) {
 	act.context = ctx
@@ -74,14 +79,16 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 	case *actor.Started:
 		// act.initlogs.Logs()
 		logs.LogInfo.Printf("actor started \"%s\"", ctx.Self().Id)
-		dev, err := contador.NewSerial(act.socket, act.baudRate)
-		if err != nil {
-			time.Sleep(3 * time.Second)
-			logs.LogError.Panicln(err)
+		if !act.test {
+			dev, err := contador.NewSerial(act.socket, act.baudRate)
+			if err != nil {
+				time.Sleep(3 * time.Second)
+				logs.LogError.Panicln(err)
+			}
+			logs.LogInfo.Printf("connected with serial port: %s", act.socket)
+			act.dev = dev
+			go act.runNewListen(act.quit)
 		}
-		logs.LogInfo.Printf("connected with serial port: %s", act.socket)
-		act.dev = dev
-		go act.runNewListen(act.quit)
 	case *actor.Stopping:
 		logs.LogWarn.Println("stopped actor")
 		select {
