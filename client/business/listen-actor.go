@@ -55,7 +55,7 @@ func NewListen(socket string, baudRate int) *ListenActor {
 	act.socket = socket
 	act.baudRate = baudRate
 	// act.logs.Logger = &logs.Logger{}
-	act.quit = make(chan int, 0)
+	// act.quit = make(chan int, 0)
 	act.timeFailure = 3
 	act.countersMem = make([]int64, 0)
 	act.queue = list.New()
@@ -80,20 +80,32 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 		// act.initlogs.Logs()
 		logs.LogInfo.Printf("actor started \"%s\"", ctx.Self().Id)
 		if !act.test {
-			dev, err := contador.NewSerial(act.socket, act.baudRate)
+			dev, err := contador.NewSerial(act.socket, act.baudRate, 30*time.Second)
 			if err != nil {
 				time.Sleep(3 * time.Second)
 				logs.LogError.Panicln(err)
 			}
 			logs.LogInfo.Printf("connected with serial port: %s", act.socket)
 			act.dev = dev
+			select {
+			case <-act.quit:
+			default:
+				if act.quit != nil {
+					close(act.quit)
+				}
+			}
+			act.quit = make(chan int)
 			go act.runNewListen(act.quit)
 		}
 	case *actor.Stopping:
 		logs.LogWarn.Println("stopped actor")
 		select {
-		case act.quit <- 1:
-		case <-time.After(3 * time.Second):
+		case _, ok := <-act.quit:
+			if ok {
+				close(act.quit)
+			}
+		case <-time.After(1 * time.Second):
+			close(act.quit)
 		}
 	// case *messages.CountingActor:
 	// 	act.countingActor = actor.NewPID(msg.Address, msg.ID)
@@ -211,7 +223,8 @@ func (act *ListenActor) processData(v []byte) {
 				if data[10] > act.countersMem[10] {
 					enters := data[10]
 					if diff := enters - act.locks0Before; diff > 0 {
-						act.context.Send(act.context.Parent(), &messages.Event{Id: id, Type: messages.TAMPERING, Value: enters})
+						act.context.Send(act.context.Parent(), &messages.Event{
+							Id: id, Type: messages.TAMPERING, Value: enters})
 					}
 					act.locks0Before = enters
 				}
@@ -221,7 +234,8 @@ func (act *ListenActor) processData(v []byte) {
 				if data[13] > act.countersMem[13] {
 					enters := data[13]
 					if diff := enters - act.locks1Before; diff > 0 {
-						act.context.Send(act.context.Parent(), &messages.Event{Id: id, Type: messages.TAMPERING, Value: enters})
+						act.context.Send(act.context.Parent(), &messages.Event{
+							Id: id, Type: messages.TAMPERING, Value: enters})
 					}
 					act.locks1Before = enters
 				}
@@ -233,13 +247,15 @@ func (act *ListenActor) processData(v []byte) {
 					id = 1
 					enters := data[13]
 					if diff := enters - act.locks0Before; diff > 0 {
-						act.context.Send(act.context.Parent(), &messages.Event{Id: id, Type: messages.TAMPERING, Value: enters})
+						act.context.Send(act.context.Parent(), &messages.Event{
+							Id: id, Type: messages.TAMPERING, Value: enters})
 					}
 					act.locks0Before = enters
 				} else {
 					enters := data[14]
 					if diff := enters - act.locks1Before; diff > 0 {
-						act.context.Send(act.context.Parent(), &messages.Event{Id: id, Type: messages.TAMPERING, Value: enters})
+						act.context.Send(act.context.Parent(), &messages.Event{
+							Id: id, Type: messages.TAMPERING, Value: enters})
 					}
 					act.locks1Before = enters
 				}
@@ -272,6 +288,7 @@ func (act *ListenActor) runNewListen(quit chan int) {
 			}
 		}
 	}
+	act.context.Send(act.context.Self(), &msgListenError{})
 }
 
 func (act *ListenActor) runListen(quit chan int) {
@@ -313,7 +330,8 @@ func (act *ListenActor) runListen(quit chan int) {
 				} else {
 					enters := event.Value
 					if diff := enters - act.exits1Before; diff > 0 {
-						act.context.Send(act.context.Parent(), &messages.Event{Id: 1, Type: messages.OUTPUT, Value: enters})
+						act.context.Send(act.context.Parent(), &messages.Event{
+							Id: 1, Type: messages.OUTPUT, Value: enters})
 					}
 					act.exits1Before = enters
 				}
@@ -322,13 +340,15 @@ func (act *ListenActor) runListen(quit chan int) {
 				if id == 0 {
 					enters := event.Value
 					if diff := enters - act.locks0Before; diff > 0 {
-						act.context.Send(act.context.Parent(), &messages.Event{Id: 0, Type: messages.TAMPERING, Value: enters})
+						act.context.Send(act.context.Parent(), &messages.Event{
+							Id: 0, Type: messages.TAMPERING, Value: enters})
 					}
 					act.locks0Before = enters
 				} else {
 					enters := event.Value
 					if diff := enters - act.locks1Before; diff > 0 {
-						act.context.Send(act.context.Parent(), &messages.Event{Id: 1, Type: messages.TAMPERING, Value: enters})
+						act.context.Send(act.context.Parent(), &messages.Event{
+							Id: 1, Type: messages.TAMPERING, Value: enters})
 					}
 					act.locks1Before = enters
 				}

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	showVersion = "1.0.22"
+	showVersion = "1.0.24"
 )
 
 var debug bool
@@ -84,7 +84,7 @@ func main() {
 		}
 	}
 
-	rootContext := actor.EmptyRootContext
+	rootContext := actor.NewActorSystem().Root
 
 	listenner := business.NewListen(socket, baudRate)
 	listenner.SendToConsole(sendGpsToConsole)

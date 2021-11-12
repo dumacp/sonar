@@ -20,6 +20,7 @@ message Event {
 		OUTPUT = 1;
 		SCENE = 2;
 		TAMPERING = 3;
+		DISCONNECTION = 4;
 	}
 	EventType type = 3;	
 }

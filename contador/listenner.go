@@ -12,8 +12,8 @@ import (
 )
 
 //NewSerial connect with device serial
-func NewSerial(port string, bautRate int) (*Device, error) {
-	dev, err := NewDevice(port, bautRate)
+func NewSerial(port string, bautRate int, readTimeout time.Duration) (*Device, error) {
+	dev, err := NewDevice(port, bautRate, readTimeout)
 	if err != nil {
 		return nil, err
 	}
