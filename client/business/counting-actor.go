@@ -269,12 +269,15 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 				// 	sendEvent(ctx, a.events, a.counterType, id, 1, messages.INPUT)
 				// 	// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: 1})
 				// }
-			} else if diff > 0 && diff < 20 {
+			} else if diff > 0 && diff < 60 {
 				if v, ok := a.puertas[uint(id)]; a.disableDoorGpio || !ok || v == a.openState[id] {
 					a.inputs[id] += diff
 					if a.disablePersistence || !a.Recovering() {
 						sendEvent(ctx, a.events, a.counterType, id, diff, messages.INPUT)
 						// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.INPUT, Value: diff})
+					}
+					if diff > 5 {
+						logs.LogError.Printf("diff is greater than 5 -> msg.GetValue(): %d, a.rawInputs[id]:: %d", msg.GetValue(), a.rawInputs[id])
 					}
 				}
 			} else if diff > -5 && diff < 0 {
@@ -285,7 +288,10 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 					sendEvent(ctx, a.events, a.counterType, id, Abs(diff), messages.INPUT)
 					// ctx.Send(a.events, msg)
 				}
+			} else {
+				logs.LogError.Printf("diff is greater than 60 or less than -5 -> msg.GetValue(): %d, a.rawInputs[id]:: %d", msg.GetValue(), a.rawInputs[id])
 			}
+
 			a.rawInputs[id] = msg.GetValue()
 		case messages.OUTPUT:
 			id := msg.Id
@@ -302,12 +308,15 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 				// 	sendEvent(ctx, a.events, a.counterType, id, 1, messages.OUTPUT)
 				// 	// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: 1})
 				// }
-			} else if diff > 0 && diff < 20 {
+			} else if diff > 0 && diff < 60 {
 				if v, ok := a.puertas[uint(id)]; a.disableDoorGpio || !ok || v == a.openState[id] {
 					a.outputs[id] += diff
 					if a.disablePersistence || !a.Recovering() {
 						sendEvent(ctx, a.events, a.counterType, id, diff, messages.OUTPUT)
 						// ctx.Send(a.events, &messages.Event{Id: id, Type: messages.OUTPUT, Value: diff})
+					}
+					if diff > 5 {
+						logs.LogWarn.Printf("diff is greater than 5 -> msg.GetValue(): %d, a.rawOutputs[id]: %d", msg.GetValue(), a.rawOutputs[id])
 					}
 				}
 			} else if diff > -5 && diff < 0 {
@@ -319,6 +328,8 @@ func (a *CountingActor) Receive(ctx actor.Context) {
 					sendEvent(ctx, a.events, a.counterType, id, Abs(diff), messages.OUTPUT)
 					// ctx.Send(a.events, msg)
 				}
+			} else {
+				logs.LogError.Printf("diff is greater than 60 or less than -5 -> msg.GetValue(): %d, a.rawOutputs[id]: %d", msg.GetValue(), a.rawOutputs[id])
 			}
 			a.rawOutputs[id] = msg.GetValue()
 		case messages.TAMPERING:

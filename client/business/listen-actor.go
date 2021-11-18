@@ -38,10 +38,10 @@ type ListenActor struct {
 
 	quit chan int
 
-	socket      string
-	baudRate    int
-	dev         *contador.Device
-	timeFailure int
+	socket   string
+	baudRate int
+	dev      *contador.Device
+	// timeFailure int
 	// counterType int
 	sendConsole bool
 	countersMem []int64
@@ -56,7 +56,7 @@ func NewListen(socket string, baudRate int) *ListenActor {
 	act.baudRate = baudRate
 	// act.logs.Logger = &logs.Logger{}
 	// act.quit = make(chan int, 0)
-	act.timeFailure = 3
+	// act.timeFailure = 3
 	act.countersMem = make([]int64, 0)
 	act.queue = list.New()
 	return act
@@ -111,8 +111,7 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 	// 	act.countingActor = actor.NewPID(msg.Address, msg.ID)
 	case *msgListenError:
 		ctx.Send(ctx.Parent(), &msgPingError{})
-		time.Sleep(time.Duration(act.timeFailure) * time.Second)
-		act.timeFailure = 2 * act.timeFailure
+		time.Sleep(3 * time.Second)
 		logs.LogError.Panicln("listen error")
 	case *MsgToTest:
 		logs.LogBuild.Printf("test frame: %s", msg.Data)
