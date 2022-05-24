@@ -191,7 +191,7 @@ func (dev *Device) ListenChannel() <-chan []int {
 }
 
 //ListenRawChannel listen raw data
-func (dev *Device) ListenRawChannel(quit chan int) chan []byte {
+func (dev *Device) ListenRawChannel(quit <-chan int) chan []byte {
 	ch := make(chan []byte, 0)
 	go func() {
 		chread := dev.read()
@@ -345,21 +345,36 @@ func (dev *Device) read() chan []byte {
 	//buf := make([]byte, 128)
 
 	countError := 0
+	max_error := 6
 	go func() {
 		defer close(ch)
 		bf := bufio.NewReader(dev.port)
 		for {
+			// tn := time.Now()
 			b, err := bf.ReadBytes('<')
 			if err != nil {
 				log.Println(err)
-				if countError > 3 {
+				//if errors.Is(err, io.EOF) {
+				//	if time.Since(tn) < dev.conf.ReadTimeout/10 {
+				//		countError++
+				//	}
+				//} else {
+				//	countError++
+				//}
+				//if countError > max_error {
+				//	dev.Close()
+				//	return
+				//}
+				//continue
+				if countError > max_error {
 					dev.Close()
 					return
 				}
-				time.Sleep(1 * time.Second)
+				// time.Sleep(1 * time.Second)
 				countError++
 				continue
 			}
+			countError = 0
 			// data := string(b[:])
 			// fmt.Printf("serial input: %q\n", data)
 			// ch <- data
