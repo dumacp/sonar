@@ -1,11 +1,11 @@
 /*
 Package implements a binary for read serial port nmea.
-
 */
 package contador
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -71,13 +71,13 @@ func (dev *Device) Send(data []byte) error {
 	return nil
 }
 
-func (dev *Device) Close() bool {
+func (dev *Device) Close() error {
 	dev.ok = false
 	if err := dev.port.Close(); err != nil {
 		// log.Println(err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 func (dev *Device) ListenRegisters() {
@@ -190,10 +190,13 @@ func (dev *Device) ListenChannel() <-chan []int {
 	return registers
 }
 
-//ListenRawChannel listen raw data
-func (dev *Device) ListenRawChannel(quit <-chan int) chan []byte {
+// ListenRawChannel listen raw data
+func (dev *Device) ListenRawChannel(contxt context.Context) chan []byte {
 	ch := make(chan []byte, 0)
+
 	go func() {
+		quit, cancel := context.WithCancel(contxt)
+		defer cancel()
 		chread := dev.read()
 		defer dev.Close()
 		defer close(ch)
@@ -201,7 +204,7 @@ func (dev *Device) ListenRawChannel(quit <-chan int) chan []byte {
 			select {
 			case ch <- v:
 			case <-time.After(200 * time.Millisecond):
-			case <-quit:
+			case <-quit.Done():
 				return
 			}
 		}
@@ -336,10 +339,10 @@ func (dev *Device) ContadorDOWN_puerta2() (int, error) {
 func (dev *Device) read() chan []byte {
 
 	if !dev.ok {
-		// log.Println("Device is closed")
+		fmt.Println("Device is closed")
 		return nil
 	}
-	// fmt.Println("reading port")
+	fmt.Println("reading port")
 	ch := make(chan []byte)
 
 	//buf := make([]byte, 128)
@@ -375,8 +378,8 @@ func (dev *Device) read() chan []byte {
 				continue
 			}
 			countError = 0
-			// data := string(b[:])
-			// fmt.Printf("serial input: %q\n", data)
+			data := string(b[:])
+			fmt.Printf("serial input: %q\n", data)
 			// ch <- data
 			ch <- b
 		}

@@ -2,6 +2,7 @@ package contador
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 	"github.com/dumacp/sonar/client/logs"
 )
 
-//NewSerial connect with device serial
+// NewSerial connect with device serial
 func NewSerial(port string, bautRate int, readTimeout time.Duration) (*Device, error) {
 	dev, err := NewDevice(port, bautRate, readTimeout)
 	if err != nil {
@@ -23,7 +24,7 @@ func NewSerial(port string, bautRate int, readTimeout time.Duration) (*Device, e
 			flagSuccess = true
 			break
 		}
-		log.Println(err)
+		log.Printf("connect device error: %s", err)
 		time.Sleep(3 * time.Second)
 	}
 	if !flagSuccess {
@@ -52,10 +53,10 @@ func SendData(dev *Device, data []byte) error {
 	return nil
 }
 
-//ListenRaw liste raw data
-func ListenRaw(quit chan int, dev *Device) <-chan interface{} {
+// ListenRaw liste raw data
+func ListenRaw(quit context.Context, dev *Device) <-chan interface{} {
 
-	ch := make(chan interface{}, 0)
+	ch := make(chan interface{})
 	chlisten := dev.ListenRawChannel(quit)
 	go func() {
 		defer close(ch)
@@ -98,7 +99,7 @@ func ListenRaw(quit chan int, dev *Device) <-chan interface{} {
 	return ch
 }
 
-//Listen function to listen events
+// Listen function to listen events
 func Listen(quit chan int, dev *Device) <-chan interface{} {
 	logs.LogInfo.Println("listennnnn port")
 

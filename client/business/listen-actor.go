@@ -3,6 +3,7 @@ package business
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,7 +24,7 @@ type MsgLogResponse struct {
 	Value []byte
 }
 
-//ListenActor actor to listen events
+// ListenActor actor to listen events
 type ListenActor struct {
 	// *logs.Logger
 	context actor.Context
@@ -36,7 +37,7 @@ type ListenActor struct {
 	exits1Before  int64
 	locks1Before  int64
 
-	quit chan int
+	quit func()
 
 	socket   string
 	baudRate int
@@ -48,7 +49,7 @@ type ListenActor struct {
 	queue       *list.List
 }
 
-//NewListen create listen actor
+// NewListen create listen actor
 func NewListen(socket string, baudRate int) *ListenActor {
 	act := &ListenActor{}
 	// act.countingActor = countingActor
@@ -70,7 +71,7 @@ func (act *ListenActor) Test(test bool) {
 	act.test = test
 }
 
-//Receive func Receive in actor
+// Receive func Receive in actor
 func (act *ListenActor) Receive(ctx actor.Context) {
 	act.context = ctx
 	switch msg := ctx.Message().(type) {
@@ -87,25 +88,14 @@ func (act *ListenActor) Receive(ctx actor.Context) {
 			}
 			logs.LogInfo.Printf("connected with serial port: %s", act.socket)
 			act.dev = dev
-			select {
-			case <-act.quit:
-			default:
-				if act.quit != nil {
-					close(act.quit)
-				}
-			}
-			act.quit = make(chan int)
-			go act.runNewListen(act.quit)
+			contxt, cancel := context.WithCancel(context.Background())
+			act.quit = cancel
+			go act.runNewListen(contxt)
 		}
 	case *actor.Stopping:
 		logs.LogWarn.Println("stopped actor")
-		select {
-		case _, ok := <-act.quit:
-			if ok {
-				close(act.quit)
-			}
-		case <-time.After(1 * time.Second):
-			close(act.quit)
+		if act.quit != nil {
+			act.quit()
 		}
 	// case *messages.CountingActor:
 	// 	act.countingActor = actor.NewPID(msg.Address, msg.ID)
@@ -265,7 +255,7 @@ func (act *ListenActor) processData(v []byte) {
 
 }
 
-func (act *ListenActor) runNewListen(quit chan int) {
+func (act *ListenActor) runNewListen(quit context.Context) {
 
 	chlisten := act.dev.ListenRawChannel(quit)
 	first := true
